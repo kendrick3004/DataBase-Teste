@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Database Viewer</h1>
+            <p>Explore e visualize o conteúdo da pasta database</p>
+        </header>
+
+        <nav class="breadcrumb">
+            <span id="breadcrumb-path">database</span>
+        </nav>
+
+        <div class="controls">
+            <div class="view-controls">
+                <button id="grid-view" class="btn btn-icon active" title="Visualização em grade">
+                    <span class="icon">⊞</span>
+                </button>
+                <button id="list-view" class="btn btn-icon" title="Visualização em lista">
+                    <span class="icon">☰</span>
+                </button>
+            </div>
+
+            <div class="action-controls">
+                <button id="select-all" class="btn btn-secondary">Selecionar Todos</button>
+                <button id="clear-selection" class="btn btn-secondary">Limpar Seleção</button>
+                <button id="download-selected" class="btn btn-primary" disabled>Baixar Selecionados</button>
+                <button id="download-zip" class="btn btn-success">Baixar ZIP</button>
+            </div>
+        </div>
+
+        <div id="selection-info" class="selection-info" style="display: none;">
+            <span id="selection-count">0 arquivos selecionados</span>
+            <span id="selection-size">0 Bytes</span>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Carregando arquivos...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <p id="error-message">Erro ao carregar arquivos</p>
+            <button id="retry-btn" class="btn btn-primary">Tentar Novamente</button>
+        </div>
+
+        <div id="file-container" class="file-container">
+            <!-- Arquivos serão carregados aqui -->
+        </div>
+    </div>
+
+    <!-- Modal de Pré-visualização -->
+    <div id="preview-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="preview-title">Arquivo</h3>
+                <div class="modal-actions">
+                    <button id="close-preview" class="btn btn-secondary">×</button>
+                </div>
+            </div>
+            <div id="preview-content" class="modal-body">
+                <!-- Conteúdo da pré-visualização -->
+            </div>
+            <div class="modal-footer">
+                <button id="download-preview" class="btn btn-primary">Baixar Arquivo</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
