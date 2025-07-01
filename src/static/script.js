@@ -26,7 +26,10 @@ const elements = {
     previewTitle: document.getElementById('preview-title'),
     previewContent: document.getElementById('preview-content'),
     closePreview: document.getElementById('close-preview'),
-    downloadPreview: document.getElementById('download-preview')
+    downloadPreview: document.getElementById('download-preview'),
+    downloadModal: document.getElementById('download-modal'),
+    progressFill: document.getElementById('progress-fill'),
+    progressText: document.getElementById('progress-text')
 };
 
 // Inicialização
@@ -54,10 +57,35 @@ function initializeEventListeners() {
         }
     });
     
-    // Tecla ESC para fechar modal
+    // Atalhos de teclado
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && elements.previewModal.style.display !== 'none') {
-            closePreview();
+        // Ctrl+A - Selecionar todos
+        if (e.ctrlKey && e.key === 'a') {
+            e.preventDefault();
+            selectAll();
+        }
+        
+        // Ctrl+D - Baixar selecionados
+        if (e.ctrlKey && e.key === 'd') {
+            e.preventDefault();
+            if (selectedFiles.length > 0) {
+                downloadSelected();
+            }
+        }
+        
+        // Escape - Fechar modal
+        if (e.key === 'Escape') {
+            if (elements.previewModal.style.display !== 'none') {
+                closePreview();
+            }
+            if (elements.downloadModal.style.display !== 'none') {
+                hideDownloadModal();
+            }
+        }
+        
+        // Delete - Limpar seleção
+        if (e.key === 'Delete') {
+            clearSelection();
         }
     });
 }
@@ -148,19 +176,25 @@ function renderGridView() {
         <div class="file-grid">
             ${files.map(file => `
                 <div class="file-card ${file.isDirectory ? 'directory' : ''} ${selectedFiles.includes(file.id) ? 'selected' : ''}" 
-                     onclick="handleFileClick('${file.id}', ${file.isDirectory})">
-                    ${!file.isDirectory ? `<input type="checkbox" class="file-checkbox" ${selectedFiles.includes(file.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleFileSelection('${file.id}')">` : ''}
-                    <div class="file-icon ${file.type}">
-                        ${getFilePreview(file)}
+                     data-file-id="${file.id}" onclick="handleFileClick('${file.id}', event)">
+                    <input type="checkbox" class="file-checkbox" 
+                           ${selectedFiles.includes(file.id) ? 'checked' : ''} 
+                           onchange="toggleFileSelection('${file.id}')" 
+                           onclick="event.stopPropagation()">
+                    <div class="file-icon ${getFileIconClass(file)}">
+                        ${getFileIcon(file)}
                     </div>
-                    <div class="file-name" title="${file.name}">${file.name}</div>
+                    <div class="file-name">${file.name}</div>
                     <div class="file-info">
-                        ${file.isDirectory ? 'Pasta' : file.size}
+                        ${file.isDirectory ? 'Pasta' : formatFileSize(file.size)}
+                        <br>
+                        <small>${formatDate(file.modified)}</small>
                     </div>
                 </div>
             `).join('')}
         </div>
     `;
+    
     elements.fileContainer.innerHTML = html;
 }
 
@@ -170,183 +204,398 @@ function renderListView() {
         <table class="file-list">
             <thead>
                 <tr>
-                    <th width="30"></th>
+                    <th style="width: 40px;">
+                        <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" 
+                               ${selectedFiles.length === files.length && files.length > 0 ? 'checked' : ''}>
+                    </th>
                     <th>Nome</th>
-                    <th width="100">Tipo</th>
-                    <th width="100">Tamanho</th>
-                    <th width="150">Modificado</th>
+                    <th>Tipo</th>
+                    <th>Tamanho</th>
+                    <th>Modificado</th>
                 </tr>
             </thead>
             <tbody>
                 ${files.map(file => `
                     <tr class="${file.isDirectory ? 'directory' : ''} ${selectedFiles.includes(file.id) ? 'selected' : ''}" 
-                        onclick="handleFileClick('${file.id}', ${file.isDirectory})">
-                        <td>
-                            ${!file.isDirectory ? `<input type="checkbox" ${selectedFiles.includes(file.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleFileSelection('${file.id}')">` : ''}
+                        data-file-id="${file.id}">
+                        <td class="checkbox-cell">
+                            <input type="checkbox" 
+                                   ${selectedFiles.includes(file.id) ? 'checked' : ''} 
+                                   onchange="toggleFileSelection('${file.id}')" 
+                                   onclick="event.stopPropagation()">
                         </td>
-                        <td>
-                            <div class="file-name-cell">
-                                <div class="file-icon ${file.type}">
-                                    ${getFilePreview(file, true)}
-                                </div>
-                                <span title="${file.name}">${file.name}</span>
+                        <td class="file-name-cell" onclick="handleFileClick('${file.id}', event)">
+                            <div class="file-icon ${getFileIconClass(file)}">
+                                ${getFileIcon(file)}
                             </div>
+                            ${file.name}
                         </td>
-                        <td>${file.isDirectory ? 'Pasta' : file.type.toUpperCase()}</td>
-                        <td>${file.isDirectory ? '-' : file.size}</td>
-                        <td>${new Date(file.lastModified * 1000).toLocaleDateString('pt-BR')}</td>
+                        <td>${file.isDirectory ? 'Pasta' : getFileType(file.name)}</td>
+                        <td>${file.isDirectory ? '-' : formatFileSize(file.size)}</td>
+                        <td>${formatDate(file.modified)}</td>
                     </tr>
                 `).join('')}
             </tbody>
         </table>
     `;
+    
     elements.fileContainer.innerHTML = html;
 }
 
-// Obter pré-visualização do arquivo
-function getFilePreview(file, isSmall = false) {
-    if (file.isDirectory) {
-        return '📁';
-    }
+// Obter classe do ícone do arquivo
+function getFileIconClass(file) {
+    if (file.isDirectory) return 'directory';
     
-    const size = isSmall ? '24px' : '48px';
+    const extension = file.name.split('.').pop().toLowerCase();
     
-    if (file.type === 'image') {
-        return `<img src="database/${file.path}" alt="${file.name}" 
-                style="width: ${size}; height: ${size}; object-fit: cover; border-radius: 4px;" 
-                onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
-                <span style="display:none;">🖼️</span>`;
-    } else if (file.type === 'svg') {
-        return `<div style="width: ${size}; height: ${size}; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; background: #f8fafc;">
-                    <object data="database/${file.path}" type="image/svg+xml" 
-                    style="width: 100%; height: 100%; pointer-events: none;"
-                    onload="this.style.display='block';" 
-                    onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
-                        <span style="display:none;">🎨</span>
-                    </object>
-                    <span style="display:none;">🎨</span>
-                </div>`;
-    } else if (file.type === 'text') {
-        return '📄';
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
+        return 'image';
+    } else if (extension === 'svg') {
+        return 'svg';
+    } else if (['txt', 'md', 'json', 'xml', 'csv'].includes(extension)) {
+        return 'text';
+    } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
+        return 'archive';
     } else {
-        const icons = {
-            pdf: '📕',
-            video: '🎥',
-            audio: '🎵',
-            archive: '📦',
-            code: '💻',
-            html: '🌐',
-            css: '🎨',
-            js: '⚡',
-            default: '📄'
-        };
-        return icons[file.type] || icons.default;
+        return 'default';
     }
 }
 
-// Manipular clique em arquivo
-function handleFileClick(fileId, isDirectory) {
+// Obter ícone do arquivo
+function getFileIcon(file) {
+    if (file.isDirectory) return '📁';
+    
+    const extension = file.name.split('.').pop().toLowerCase();
+    
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
+        return '🖼️';
+    } else if (extension === 'svg') {
+        return '🎨';
+    } else if (['txt', 'md'].includes(extension)) {
+        return '📄';
+    } else if (['json', 'xml'].includes(extension)) {
+        return '📋';
+    } else if (extension === 'csv') {
+        return '📊';
+    } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
+        return '📦';
+    } else if (['html', 'htm'].includes(extension)) {
+        return '🌐';
+    } else if (['js', 'css', 'py', 'php'].includes(extension)) {
+        return '💻';
+    } else {
+        return '📄';
+    }
+}
+
+// Obter tipo do arquivo
+function getFileType(filename) {
+    const extension = filename.split('.').pop().toLowerCase();
+    return extension.toUpperCase();
+}
+
+// Manipular clique no arquivo
+function handleFileClick(fileId, event) {
     const file = files.find(f => f.id === fileId);
     if (!file) return;
     
-    if (isDirectory) {
-        navigateToPath(file.path);
+    if (file.isDirectory) {
+        const newPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+        navigateToPath(newPath);
     } else {
-        showPreview(file);
+        // Pré-visualizar arquivo
+        previewFile(file);
     }
 }
 
-// Mostrar pré-visualização do arquivo
-async function showPreview(file) {
-    elements.previewTitle.textContent = file.name;
-    elements.previewModal.style.display = 'flex';
+// Alternar seleção de arquivo
+function toggleFileSelection(fileId) {
+    const index = selectedFiles.indexOf(fileId);
+    if (index > -1) {
+        selectedFiles.splice(index, 1);
+    } else {
+        selectedFiles.push(fileId);
+    }
     
-    // Configurar botão de download
-    elements.downloadPreview.onclick = () => downloadFile(file);
+    updateSelectionInfo();
+    updateFileVisualState();
+    updateSelectAllCheckbox();
+}
+
+// Alternar seleção de todos
+function toggleSelectAll() {
+    const checkbox = document.getElementById('select-all-checkbox');
+    if (checkbox.checked) {
+        selectAll();
+    } else {
+        clearSelection();
+    }
+}
+
+// Selecionar todos os arquivos
+function selectAll() {
+    selectedFiles = files.map(file => file.id);
+    updateSelectionInfo();
+    updateFileVisualState();
+    updateSelectAllCheckbox();
+}
+
+// Limpar seleção
+function clearSelection() {
+    selectedFiles = [];
+    updateSelectionInfo();
+    updateFileVisualState();
+    updateSelectAllCheckbox();
+}
+
+// Atualizar estado visual dos arquivos
+function updateFileVisualState() {
+    // Atualizar cards na visualização em grade
+    document.querySelectorAll('.file-card').forEach(card => {
+        const fileId = card.dataset.fileId;
+        const checkbox = card.querySelector('.file-checkbox');
+        const isSelected = selectedFiles.includes(fileId);
+        
+        card.classList.toggle('selected', isSelected);
+        if (checkbox) checkbox.checked = isSelected;
+    });
+    
+    // Atualizar linhas na visualização em lista
+    document.querySelectorAll('.file-list tr[data-file-id]').forEach(row => {
+        const fileId = row.dataset.fileId;
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        const isSelected = selectedFiles.includes(fileId);
+        
+        row.classList.toggle('selected', isSelected);
+        if (checkbox) checkbox.checked = isSelected;
+    });
+}
+
+// Atualizar checkbox "Selecionar Todos"
+function updateSelectAllCheckbox() {
+    const checkbox = document.getElementById('select-all-checkbox');
+    if (checkbox) {
+        checkbox.checked = selectedFiles.length === files.length && files.length > 0;
+        checkbox.indeterminate = selectedFiles.length > 0 && selectedFiles.length < files.length;
+    }
+}
+
+// Atualizar informações de seleção
+function updateSelectionInfo() {
+    const selectedCount = selectedFiles.length;
+    const selectedFilesData = files.filter(file => selectedFiles.includes(file.id));
+    const totalSize = selectedFilesData.reduce((sum, file) => sum + (file.size || 0), 0);
+    
+    if (selectedCount > 0) {
+        elements.selectionCount.textContent = `${selectedCount} ${selectedCount === 1 ? 'item selecionado' : 'itens selecionados'}`;
+        elements.selectionSize.textContent = formatFileSize(totalSize);
+        elements.selectionInfo.style.display = 'flex';
+        elements.downloadSelectedBtn.disabled = false;
+    } else {
+        elements.selectionInfo.style.display = 'none';
+        elements.downloadSelectedBtn.disabled = true;
+    }
+}
+
+// Baixar arquivos selecionados
+async function downloadSelected() {
+    if (selectedFiles.length === 0) return;
+    
+    showDownloadModal();
     
     try {
-        const content = await loadFileContent(file);
-        displayPreviewContent(file, content);
+        const selectedFilesData = files.filter(file => selectedFiles.includes(file.id));
+        
+        if (selectedFilesData.length === 1 && !selectedFilesData[0].isDirectory) {
+            // Download único
+            await downloadSingleFile(selectedFilesData[0]);
+        } else {
+            // Download múltiplo como ZIP
+            await downloadMultipleFiles(selectedFilesData);
+        }
     } catch (error) {
-        console.error('Erro ao carregar preview:', error);
-        elements.previewContent.innerHTML = '<p>Erro ao carregar pré-visualização do arquivo.</p>';
+        console.error('Erro no download:', error);
+        alert('Erro ao baixar arquivos: ' + error.message);
+    } finally {
+        hideDownloadModal();
     }
 }
 
-// Carregar conteúdo do arquivo para pré-visualização
-async function loadFileContent(file) {
+// Baixar como ZIP
+async function downloadAsZip() {
+    showDownloadModal();
+    
     try {
-        const response = await fetch(`/api/files/content/${encodeURIComponent(file.path)}`);
+        updateProgress(10, 'Preparando arquivos...');
+        
+        const response = await fetch('/api/files/download-zip', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                path: currentPath,
+                includeAll: true
+            })
+        });
         
         if (!response.ok) {
             throw new Error(`Erro ${response.status}: ${response.statusText}`);
         }
         
-        const data = await response.json();
+        updateProgress(50, 'Compactando arquivos...');
         
-        if (data.success) {
-            return data;
-        } else {
-            throw new Error(data.error || 'Erro ao carregar conteúdo');
-        }
+        const blob = await response.blob();
+        updateProgress(90, 'Finalizando download...');
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `database-${currentPath || 'root'}-${new Date().toISOString().split('T')[0]}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        updateProgress(100, 'Download concluído!');
+        
+        setTimeout(() => {
+            hideDownloadModal();
+        }, 1000);
+        
     } catch (error) {
-        console.error('Erro ao carregar arquivo:', error);
-        // Fallback para conteúdo simulado
-        return {
-            type: file.type,
-            content: `Erro ao carregar conteúdo do arquivo: ${file.name}\n\nTipo: ${file.type}\nTamanho: ${file.size}`
-        };
+        console.error('Erro no download ZIP:', error);
+        alert('Erro ao baixar ZIP: ' + error.message);
+        hideDownloadModal();
     }
 }
 
-// Exibir conteúdo da pré-visualização
-function displayPreviewContent(file, content) {
-    let html = '';
+// Download de arquivo único
+async function downloadSingleFile(file) {
+    updateProgress(20, `Baixando ${file.name}...`);
     
-    switch (content.type) {
-        case 'image':
-            html = `<div class="image-preview">
-                        <img src="${content.url}" alt="${file.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                        <p style="display:none;">Não foi possível carregar a imagem.</p>
-                    </div>`;
-            break;
-            
-        case 'svg':
-            if (content.content) {
-                html = `<div class="svg-preview">
-                            <div style="max-width: 100%; max-height: 400px; overflow: auto;">
-                                ${content.content}
-                            </div>
-                        </div>`;
-            } else if (content.url) {
-                html = `<div class="svg-preview">
-                            <object data="${content.url}" type="image/svg+xml" style="width: 100%; height: 400px;">
-                                <p>Não foi possível carregar o SVG.</p>
-                            </object>
-                        </div>`;
-            }
-            break;
-            
-        case 'text':
-        case 'html':
-        case 'css':
-        case 'js':
-        case 'code':
-            html = `<div class="text-preview"><pre>${escapeHtml(content.content || 'Conteúdo não disponível')}</pre></div>`;
-            break;
-            
-        default:
-            html = `<div class="text-preview">Pré-visualização não disponível para este tipo de arquivo.\n\nTipo: ${file.type}\nTamanho: ${file.size}</div>`;
+    const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+    const response = await fetch(`/api/files/download/${encodeURIComponent(filePath)}`);
+    
+    if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${response.statusText}`);
     }
     
-    elements.previewContent.innerHTML = html;
+    updateProgress(70, 'Processando arquivo...');
+    
+    const blob = await response.blob();
+    updateProgress(90, 'Finalizando download...');
+    
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    updateProgress(100, 'Download concluído!');
 }
 
-// Escapar HTML para exibição segura
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// Download de múltiplos arquivos
+async function downloadMultipleFiles(filesData) {
+    updateProgress(20, 'Preparando múltiplos arquivos...');
+    
+    const response = await fetch('/api/files/download-multiple', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            files: filesData.map(file => ({
+                name: file.name,
+                path: currentPath ? `${currentPath}/${file.name}` : file.name,
+                isDirectory: file.isDirectory
+            }))
+        })
+    });
+    
+    if (!response.ok) {
+        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+    }
+    
+    updateProgress(60, 'Compactando arquivos...');
+    
+    const blob = await response.blob();
+    updateProgress(90, 'Finalizando download...');
+    
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `selected-files-${new Date().toISOString().split('T')[0]}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    updateProgress(100, 'Download concluído!');
+}
+
+// Pré-visualizar arquivo
+async function previewFile(file) {
+    elements.previewTitle.textContent = file.name;
+    elements.downloadPreview.onclick = () => downloadSingleFile(file);
+    
+    const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+    const extension = file.name.split('.').pop().toLowerCase();
+    
+    try {
+        if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
+            // Pré-visualização de imagem
+            elements.previewContent.innerHTML = `
+                <div class="image-preview">
+                    <img src="/api/files/preview/${encodeURIComponent(filePath)}" alt="${file.name}" />
+                </div>
+            `;
+        } else if (extension === 'svg') {
+            // Pré-visualização de SVG
+            const response = await fetch(`/api/files/preview/${encodeURIComponent(filePath)}`);
+            const svgContent = await response.text();
+            elements.previewContent.innerHTML = `
+                <div class="svg-preview">
+                    ${svgContent}
+                </div>
+            `;
+        } else if (['txt', 'md', 'json', 'xml', 'csv', 'html', 'htm', 'js', 'css', 'py'].includes(extension)) {
+            // Pré-visualização de texto
+            const response = await fetch(`/api/files/preview/${encodeURIComponent(filePath)}`);
+            const textContent = await response.text();
+            const isCode = ['js', 'css', 'py', 'html', 'htm'].includes(extension);
+            elements.previewContent.innerHTML = `
+                <div class="${isCode ? 'code-preview' : 'text-preview'}">
+                    ${escapeHtml(textContent)}
+                </div>
+            `;
+        } else {
+            // Arquivo não suportado para pré-visualização
+            elements.previewContent.innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📄</div>
+                    <h3>Pré-visualização não disponível</h3>
+                    <p>Este tipo de arquivo não pode ser visualizado no navegador.</p>
+                    <p><strong>Tipo:</strong> ${extension.toUpperCase()}</p>
+                    <p><strong>Tamanho:</strong> ${formatFileSize(file.size)}</p>
+                </div>
+            `;
+        }
+        
+        elements.previewModal.style.display = 'flex';
+    } catch (error) {
+        console.error('Erro na pré-visualização:', error);
+        elements.previewContent.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #dc2626;">
+                <h3>Erro na pré-visualização</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+        elements.previewModal.style.display = 'flex';
+    }
 }
 
 // Fechar pré-visualização
@@ -354,140 +603,24 @@ function closePreview() {
     elements.previewModal.style.display = 'none';
 }
 
-// Alternar seleção de arquivo
-function toggleFileSelection(fileId) {
-    if (selectedFiles.includes(fileId)) {
-        selectedFiles = selectedFiles.filter(id => id !== fileId);
-    } else {
-        selectedFiles.push(fileId);
-    }
-    renderFiles();
+// Mostrar modal de download
+function showDownloadModal() {
+    elements.downloadModal.style.display = 'flex';
+    updateProgress(0, 'Iniciando...');
 }
 
-// Selecionar todos os arquivos
-function selectAll() {
-    const selectableFiles = files.filter(f => !f.isDirectory);
-    
-    if (selectedFiles.length === selectableFiles.length) {
-        selectedFiles = [];
-    } else {
-        selectedFiles = selectableFiles.map(f => f.id);
-    }
-    renderFiles();
+// Esconder modal de download
+function hideDownloadModal() {
+    elements.downloadModal.style.display = 'none';
 }
 
-// Limpar seleção
-function clearSelection() {
-    selectedFiles = [];
-    renderFiles();
+// Atualizar progresso
+function updateProgress(percentage, text) {
+    elements.progressFill.style.width = `${percentage}%`;
+    elements.progressText.textContent = text;
 }
 
-// Atualizar informações de seleção
-function updateSelectionInfo() {
-    const selectedCount = selectedFiles.length;
-    const selectedFilesData = files.filter(f => selectedFiles.includes(f.id));
-    const totalSize = selectedFilesData.reduce((total, file) => total + (file.sizeInBytes || 0), 0);
-    
-    if (selectedCount > 0) {
-        elements.selectionInfo.style.display = 'flex';
-        elements.selectionCount.textContent = `${selectedCount} arquivo${selectedCount > 1 ? 's' : ''} selecionado${selectedCount > 1 ? 's' : ''}`;
-        elements.selectionSize.textContent = formatFileSize(totalSize);
-        elements.downloadSelectedBtn.disabled = false;
-        elements.downloadZipBtn.disabled = false;
-    } else {
-        elements.selectionInfo.style.display = 'none';
-        elements.downloadSelectedBtn.disabled = true;
-        elements.downloadZipBtn.disabled = false; // ZIP completo sempre disponível
-    }
-}
-
-// Download de arquivos selecionados
-function downloadSelected() {
-    if (selectedFiles.length === 0) return;
-    
-    if (selectedFiles.length === 1) {
-        const file = files.find(f => f.id === selectedFiles[0]);
-        downloadFile(file);
-    } else {
-        downloadAsZip(true); // Apenas selecionados
-    }
-}
-
-// Download como ZIP
-async function downloadAsZip(onlySelected = false) {
-    const filesToDownload = onlySelected ? 
-        files.filter(f => selectedFiles.includes(f.id)) : 
-        files.filter(f => !f.isDirectory);
-    
-    if (filesToDownload.length === 0) return;
-    
-    try {
-        // Carregar JSZip dinamicamente
-        const JSZip = await loadJSZip();
-        const zip = new JSZip();
-        
-        // Adicionar arquivos ao ZIP
-        for (const file of filesToDownload) {
-            try {
-                const response = await fetch(`/database/${file.path}`);
-                if (response.ok) {
-                    const blob = await response.blob();
-                    zip.file(file.name, blob);
-                } else {
-                    // Adicionar arquivo com conteúdo de fallback
-                    zip.file(file.name, `Arquivo: ${file.name}\nTipo: ${file.type}\nTamanho: ${file.size}`);
-                }
-            } catch (error) {
-                console.warn(`Erro ao adicionar ${file.name} ao ZIP:`, error);
-                zip.file(file.name, `Erro ao carregar: ${file.name}`);
-            }
-        }
-        
-        // Gerar e baixar o ZIP
-        const zipBlob = await zip.generateAsync({type: 'blob'});
-        const url = URL.createObjectURL(zipBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = onlySelected ? 
-            `arquivos_selecionados_${new Date().getTime()}.zip` :
-            `database_completo_${new Date().getTime()}.zip`;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-    } catch (error) {
-        console.error('Erro ao criar ZIP:', error);
-        alert('Erro ao criar arquivo ZIP');
-    }
-}
-
-// Carregar JSZip dinamicamente
-async function loadJSZip() {
-    if (window.JSZip) return window.JSZip;
-    
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-        script.onload = () => resolve(window.JSZip);
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-}
-
-// Download de arquivo único
-function downloadFile(file) {
-    const link = document.createElement('a');
-    link.href = `/api/files/download/${encodeURIComponent(file.path)}`;
-    link.download = file.name;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// Formatar tamanho de arquivo
+// Utilitários
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -496,7 +629,20 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Utilitários de UI
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function showLoading() {
     elements.loading.style.display = 'block';
     elements.fileContainer.style.display = 'none';
@@ -508,8 +654,8 @@ function hideLoading() {
 }
 
 function showError(message) {
-    elements.error.style.display = 'block';
     elements.errorMessage.textContent = message;
+    elements.error.style.display = 'block';
     elements.fileContainer.style.display = 'none';
 }
 

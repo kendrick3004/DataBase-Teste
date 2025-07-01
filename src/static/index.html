@@ -41,6 +41,10 @@
             <span id="selection-size">0 Bytes</span>
         </div>
 
+        <div class="keyboard-shortcuts">
+            <small><strong>Atalhos:</strong> Ctrl+A (Selecionar Todos) | Ctrl+D (Baixar Selecionados) | Escape (Fechar Modal)</small>
+        </div>
+
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
             <p>Carregando arquivos...</p>
@@ -70,6 +74,23 @@
             </div>
             <div class="modal-footer">
                 <button id="download-preview" class="btn btn-primary">Baixar Arquivo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Progresso de Download -->
+    <div id="download-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Preparando Download</h3>
+            </div>
+            <div class="modal-body">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <p id="progress-text">Preparando arquivos...</p>
+                </div>
             </div>
         </div>
     </div>
