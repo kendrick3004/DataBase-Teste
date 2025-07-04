@@ -93,9 +93,9 @@ function initializeEventListeners() {
 // Auto-refresh para detectar mudanças na pasta
 function startAutoRefresh() {
     setInterval(() => {
-        // Verificar mudanças a cada 5 segundos
+        // Verificar mudanças a cada 10 segundos
         loadFiles(currentPath, true);
-    }, 5000);
+    }, 10000);
 }
 
 // Carregar arquivos da pasta database via API
@@ -245,12 +245,12 @@ function renderListView() {
 // Obter classe do ícone do arquivo
 function getFileIconClass(file) {
     if (file.isDirectory) return 'directory';
-    
-    const extension = file.name.split('.').pop().toLowerCase();
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
+        const extension = file.name.split(".").pop().toLowerCase();
+    const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+
+    if (["jpg", "jpeg", "png", "gif", "bmp", "webp"].includes(extension)) {
         return 'image';
-    } else if (extension === 'svg') {
+    } else if (extension === "svg") {
         return 'svg';
     } else if (['txt', 'md', 'json', 'xml', 'csv'].includes(extension)) {
         return 'text';
@@ -264,13 +264,14 @@ function getFileIconClass(file) {
 // Obter ícone do arquivo
 function getFileIcon(file) {
     if (file.isDirectory) return '📁';
-    
+
     const extension = file.name.split('.').pop().toLowerCase();
-    
+    const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+
     if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
-        return '🖼️';
+        return `<img src="/api/files/preview/${encodeURIComponent(filePath)}" alt="${file.name}" class="file-thumbnail" />`;
     } else if (extension === 'svg') {
-        return '🎨';
+        return `<img src="/api/files/preview/${encodeURIComponent(filePath)}" alt="${file.name}" class="file-thumbnail" />`;
     } else if (['txt', 'md'].includes(extension)) {
         return '📄';
     } else if (['json', 'xml'].includes(extension)) {
@@ -386,15 +387,36 @@ function updateSelectionInfo() {
     const selectedFilesData = files.filter(file => selectedFiles.includes(file.id));
     const totalSize = selectedFilesData.reduce((sum, file) => sum + (file.size || 0), 0);
     
+    // Atualizar contadores
+    elements.selectionCount.textContent = `${selectedCount} ${selectedCount === 1 ? 'item selecionado' : 'itens selecionados'}`;
+    elements.selectionSize.textContent = formatFileSize(totalSize);
+    
+    // Mostrar/ocultar elementos baseado na seleção
     if (selectedCount > 0) {
-        elements.selectionCount.textContent = `${selectedCount} ${selectedCount === 1 ? 'item selecionado' : 'itens selecionados'}`;
-        elements.selectionSize.textContent = formatFileSize(totalSize);
         elements.selectionInfo.style.display = 'flex';
+        elements.downloadSelectedBtn.style.display = 'inline-block';
+        elements.downloadZipBtn.style.display = 'inline-block';
         elements.downloadSelectedBtn.disabled = false;
+        
+        // Mostrar atalhos de teclado
+        const keyboardShortcuts = document.querySelector('.keyboard-shortcuts');
+        if (keyboardShortcuts) {
+            keyboardShortcuts.style.display = 'block';
+        }
     } else {
         elements.selectionInfo.style.display = 'none';
+        elements.downloadSelectedBtn.style.display = 'none';
+        elements.downloadZipBtn.style.display = 'none';
         elements.downloadSelectedBtn.disabled = true;
+        
+        // Ocultar atalhos de teclado
+        const keyboardShortcuts = document.querySelector('.keyboard-shortcuts');
+        if (keyboardShortcuts) {
+            keyboardShortcuts.style.display = 'none';
+        }
     }
+    
+    updateSelectAllCheckbox();
 }
 
 // Baixar arquivos selecionados

@@ -33,8 +33,9 @@ def get_file_type(filename):
 def list_files(subpath=''):
     """Listar arquivos da pasta database"""
     try:
-        # Caminho base da pasta database
-        database_path = os.path.join(current_app.static_folder, 'database')
+        # Caminho base da pasta database na raiz do projeto
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        database_path = os.path.join(project_root, 'database')
         
         # Caminho completo incluindo subpasta
         full_path = os.path.join(database_path, subpath) if subpath else database_path
@@ -98,7 +99,8 @@ def list_files(subpath=''):
 def download_file(filepath):
     """Download de arquivo específico"""
     try:
-        database_path = os.path.join(current_app.static_folder, 'database')
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        database_path = os.path.join(project_root, 'database')
         file_path = os.path.join(database_path, filepath)
         
         if not os.path.exists(file_path):
@@ -119,7 +121,8 @@ def download_file(filepath):
 def download_directory_as_zip(dir_path):
     """Download de diretório como ZIP"""
     try:
-        database_path = os.path.join(current_app.static_folder, 'database')
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        database_path = os.path.join(project_root, 'database')
         full_dir_path = os.path.join(database_path, dir_path)
         
         if not os.path.exists(full_dir_path) or not os.path.isdir(full_dir_path):
@@ -159,7 +162,8 @@ def download_zip():
         current_path = data.get('path', '')
         include_all = data.get('includeAll', True)
         
-        database_path = os.path.join(current_app.static_folder, 'database')
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        database_path = os.path.join(project_root, 'database')
         full_path = os.path.join(database_path, current_path) if current_path else database_path
         
         if not os.path.exists(full_path) or not os.path.isdir(full_path):
@@ -204,7 +208,8 @@ def download_multiple():
         if not files_data:
             return jsonify({'error': 'Nenhum arquivo especificado'}), 400
         
-        database_path = os.path.join(current_app.static_folder, 'database')
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        database_path = os.path.join(project_root, 'database')
         
         # Criar arquivo ZIP temporário
         temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
@@ -250,7 +255,8 @@ def download_multiple():
 def preview_file(filepath):
     """Pré-visualização de arquivo"""
     try:
-        database_path = os.path.join(current_app.static_folder, 'database')
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        database_path = os.path.join(project_root, 'database')
         file_path = os.path.join(database_path, filepath)
         
         if not os.path.exists(file_path) or os.path.isdir(file_path):

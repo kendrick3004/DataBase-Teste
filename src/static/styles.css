@@ -324,28 +324,28 @@ body {
 }
 
 .file-icon.image {
-    background: linear-gradient(135deg, #dbeafe 0%, #3b82f6 100%);
-    color: white;
+    background: none;
+    color: inherit;
 }
 
 .file-icon.svg {
-    background: linear-gradient(135deg, #fce7f3 0%, #be185d 100%);
-    color: white;
+    background: none;
+    color: inherit;
 }
 
 .file-icon.text {
-    background: linear-gradient(135deg, #dcfce7 0%, #16a34a 100%);
-    color: white;
+    background: none;
+    color: inherit;
 }
 
 .file-icon.archive {
-    background: linear-gradient(135deg, #fce7f3 0%, #be185d 100%);
-    color: white;
+    background: none;
+    color: inherit;
 }
 
 .file-icon.default {
-    background: linear-gradient(135deg, #f1f5f9 0%, #64748b 100%);
-    color: white;
+    background: none;
+    color: inherit;
 }
 
 .file-name {
@@ -685,5 +685,41 @@ body {
 .file-list tr:hover .file-name {
     color: #3b82f6;
     font-weight: 600;
+}
+
+
+/* Estilos para thumbnails de imagem */
+.file-thumbnail {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.file-card:hover .file-thumbnail {
+    transform: scale(1.1);
+    border-color: #3b82f6;
+    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
+}
+
+/* Thumbnails na visualização em lista */
+.file-list .file-thumbnail {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    margin-right: 8px;
+}
+
+/* Fallback para imagens que não carregam */
+.file-thumbnail:not([src]), .file-thumbnail[src=""] {
+    display: none;
+}
+
+.file-thumbnail:not([src]) + .file-icon,
+.file-thumbnail[src=""] + .file-icon {
+    display: flex;
 }
 
